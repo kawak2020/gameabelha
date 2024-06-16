@@ -20,9 +20,20 @@ class Pollen(Widget):
     def remove(self):
         self.canvas.clear()
 
+class Nectar(Widget):
+    def __init__(self, pos, size, **kwargs):
+        super(Nectar, self).__init__(**kwargs)
+        with self.canvas:
+            self.texture = CoreImage('nectar_sprite.png').texture
+            self.rect = Rectangle(texture=self.texture, pos=pos, size=size)
+
+    def remove(self):
+        self.canvas.clear()
+
 class Flower(Widget):
     pollen_count = NumericProperty(3)
     pollen_list = ListProperty([])
+    has_nectar = NumericProperty(0)
 
     def __init__(self, pos, size, **kwargs):
         super(Flower, self).__init__(**kwargs)
@@ -33,6 +44,7 @@ class Flower(Widget):
             self.rect = Rectangle(texture=self.texture, pos=pos, size=size)
 
         self.create_pollen()
+        self.create_nectar()
 
     def create_pollen(self):
         for _ in range(self.pollen_count):
@@ -42,6 +54,14 @@ class Flower(Widget):
             self.pollen_list.append(pollen)
             self.add_widget(pollen)
 
+    def create_nectar(self):
+        if randint(0, 1):  # 50% chance de ter néctar
+            nectar_x = self.x + randint(0, self.width - 20)
+            nectar_y = self.y + randint(0, self.height - 20)
+            self.nectar = Nectar(pos=(nectar_x, nectar_y), size=(20, 20))
+            self.has_nectar = 1
+            self.add_widget(self.nectar)
+
     def collect_pollen(self):
         collected = len(self.pollen_list)
         for pollen in self.pollen_list:
@@ -49,10 +69,18 @@ class Flower(Widget):
         self.pollen_list = []
         return collected
 
+    def collect_nectar(self):
+        if self.has_nectar:
+            self.nectar.remove()
+            self.has_nectar = 0
+            return 1
+        return 0
+
 class GameWidget(Widget):
     abelha_x = NumericProperty(100)
     abelha_y = NumericProperty(100)
-    pontos = NumericProperty(0)
+    pollen_collected = NumericProperty(0)
+    nectar_collected = NumericProperty(0)
     flores = ListProperty([])
     total_pollen = NumericProperty(0)
     rotation_angle = NumericProperty(0)
@@ -69,11 +97,12 @@ class GameWidget(Widget):
         self.abelha_image = CoreImage('abelha_sprite.png').texture
 
         self.status_bar = BoxLayout(size_hint=(1, None), height=50)
-        self.label = Label(text="Pontos: 0", font_size='20sp', color=(0, 0, 0, 1))
+        self.label = Label(text="Pólen Recolhido: 0, Néctar Recolhido: 0", font_size='20sp', color=(0, 0, 0, 1))
         self.status_bar.add_widget(self.label)
         self.add_widget(self.status_bar)
 
-        self.bind(pontos=self.update_pontos)
+        self.bind(pollen_collected=self.update_status)
+        self.bind(nectar_collected=self.update_status)
         self.create_flowers()
 
         Window.bind(on_key_down=self.on_key_down)
@@ -117,10 +146,10 @@ class GameWidget(Widget):
     def update(self, dt):
         for flower in self.flores:
             if self.collide_widget(self.abelha_x, self.abelha_y, flower):
-                collected = flower.collect_pollen()
-                self.pontos += collected
+                self.pollen_collected += flower.collect_pollen()
+                self.nectar_collected += flower.collect_nectar()
 
-        if self.pontos >= self.total_pollen:
+        if self.pollen_collected >= self.total_pollen:
             self.show_congratulations()
 
     def collide_widget(self, abelha_x, abelha_y, widget):
@@ -130,12 +159,12 @@ class GameWidget(Widget):
                 abelha_y < widget_y + widget.size[1] and
                 abelha_y + self.abelha_size > widget_y)
 
-    def update_pontos(self, instance, value):
-        self.label.text = f"Pontos: {value}"
+    def update_status(self, instance, value):
+        self.label.text = f"Pólen Recolhido: {self.pollen_collected}, Néctar Recolhido: {self.nectar_collected}"
 
     def show_congratulations(self):
         self.clear_widgets()
-        congrats_label = Label(text=f"Parabéns! Você recolheu {self.pontos} polens.", font_size='20sp', color=(0, 0, 0, 1), pos=(Window.width / 2 - 150, Window.height / 2))
+        congrats_label = Label(text=f"Parabéns! Você recolheu {self.pollen_collected} pólens e {self.nectar_collected} néctares.", font_size='20sp', color=(0, 0, 0, 1), pos=(Window.width / 2 - 150, Window.height / 2))
         self.add_widget(congrats_label)
 
         restart_button = Button(text='Recomeçar', size_hint=(None, None), size=(200, 50), pos=(Window.width / 2 - 100, Window.height / 2 - 50))
