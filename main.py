@@ -1,13 +1,15 @@
 from kivy.app import App
 from kivy.uix.widget import Widget
+from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import NumericProperty, ListProperty
-from kivy.graphics import Rectangle, Color
+from kivy.graphics import Rectangle, Color, Rotate
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.core.image import Image as CoreImage
 from random import randint
+from math import atan2, degrees
 
 class Pollen(Widget):
     def __init__(self, pos, size, **kwargs):
@@ -54,11 +56,12 @@ class GameWidget(Widget):
     pontos = NumericProperty(0)
     flores = ListProperty([])
     total_pollen = NumericProperty(0)
+    rotation = Rotate(angle=0, origin=(0, 0))
 
     def __init__(self, **kwargs):
         super(GameWidget, self).__init__(**kwargs)
         self.abelha_size = 50
-        self.velocidade = 10
+        self.velocidade = 5
 
         with self.canvas:
             # Desenhar fundo branco para garantir visibilidade do texto
@@ -67,13 +70,17 @@ class GameWidget(Widget):
 
             try:
                 self.abelha_image = CoreImage('abelha_sprite.png').texture
+                self.rotation = Rotate(angle=0, origin=(self.abelha_x + self.abelha_size / 2, self.abelha_y + self.abelha_size / 2))
+                self.canvas.before.add(self.rotation)
                 self.abelha = Rectangle(texture=self.abelha_image, pos=(self.abelha_x, self.abelha_y), size=(self.abelha_size, self.abelha_size))
             except Exception as e:
                 print(f"Erro ao carregar a imagem da abelha: {e}")
 
-        # Label para mostrar a pontuação
-        self.label = Label(text="Pontos: 0", font_size='20sp', color=(1, 1, 0, 1), pos=(Window.width - 150, Window.height - 40))
-        self.add_widget(self.label)
+        # Barra de status
+        self.status_bar = BoxLayout(size_hint=(1, None), height=50)
+        self.label = Label(text="Pontos: 0", font_size='20sp', color=(0, 0, 0, 1))  # Letras pretas
+        self.status_bar.add_widget(self.label)
+        self.add_widget(self.status_bar)
 
         self.bind(pontos=self.update_pontos)
         self.create_flowers()
@@ -99,21 +106,21 @@ class GameWidget(Widget):
             self.abelha_x += self.velocidade
         elif key == 276:  # Seta para a esquerda
             self.abelha_x -= self.velocidade
-
-    def update(self, dt):
         self.abelha.pos = (self.abelha_x, self.abelha_y)
 
+    def update(self, dt):
         # Verifica se a abelha tocou alguma flor
         for flower in self.flores:
             if self.collide_widget(self.abelha, flower):
                 collected = flower.collect_pollen()
                 self.pontos += collected
 
-        # Atualizar a posição da label de pontos
-        self.label.pos = (Window.width - 150, Window.height - 40)
-
         if self.pontos >= self.total_pollen:
             self.show_congratulations()
+
+    def rotate_to_target(self):
+        angle = atan2(self.target_y - self.abelha_y, self.target_x - self.abelha_x)
+        self.rotation.angle = degrees(angle) - 90  # Ajustar para que a abelha fique na direção do movimento
 
     def collide_widget(self, widget1, widget2):
         widget1_x, widget1_y = widget1.pos
@@ -125,11 +132,10 @@ class GameWidget(Widget):
 
     def update_pontos(self, instance, value):
         self.label.text = f"Pontos: {value}"
-        self.label.texture_update()
 
     def show_congratulations(self):
         self.clear_widgets()
-        congrats_label = Label(text=f"Parabéns! Você recolheu {self.pontos} polens.", font_size='20sp', color=(1, 1, 0, 1), pos=(Window.width / 2 - 150, Window.height / 2))
+        congrats_label = Label(text=f"Parabéns! Você recolheu {self.pontos} polens.", font_size='20sp', color=(0, 0, 0, 1), pos=(Window.width / 2 - 150, Window.height / 2))
         self.add_widget(congrats_label)
 
         restart_button = Button(text='Recomeçar', size_hint=(None, None), size=(200, 50), pos=(Window.width / 2 - 100, Window.height / 2 - 50))
