@@ -2,14 +2,13 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import NumericProperty, ListProperty
-from kivy.graphics import Rectangle, Color, Rotate
+from kivy.graphics import Rectangle, Color, PushMatrix, PopMatrix, Rotate, Translate
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.core.image import Image as CoreImage
 from random import randint
-from math import atan2, degrees
 
 class Pollen(Widget):
     def __init__(self, pos, size, **kwargs):
@@ -56,29 +55,21 @@ class GameWidget(Widget):
     pontos = NumericProperty(0)
     flores = ListProperty([])
     total_pollen = NumericProperty(0)
-    rotation = Rotate(angle=0, origin=(0, 0))
+    rotation_angle = NumericProperty(0)
 
     def __init__(self, **kwargs):
         super(GameWidget, self).__init__(**kwargs)
         self.abelha_size = 50
         self.velocidade = 5
 
-        with self.canvas:
-            # Desenhar fundo branco para garantir visibilidade do texto
-            self.canvas.before.add(Color(1, 1, 1, 1))
-            self.canvas.before.add(Rectangle(size=Window.size))
+        with self.canvas.before:
+            Color(1, 1, 1, 1)
+            Rectangle(size=Window.size)
 
-            try:
-                self.abelha_image = CoreImage('abelha_sprite.png').texture
-                self.rotation = Rotate(angle=0, origin=(self.abelha_x + self.abelha_size / 2, self.abelha_y + self.abelha_size / 2))
-                self.canvas.before.add(self.rotation)
-                self.abelha = Rectangle(texture=self.abelha_image, pos=(self.abelha_x, self.abelha_y), size=(self.abelha_size, self.abelha_size))
-            except Exception as e:
-                print(f"Erro ao carregar a imagem da abelha: {e}")
+        self.abelha_image = CoreImage('abelha_sprite.png').texture
 
-        # Barra de status
         self.status_bar = BoxLayout(size_hint=(1, None), height=50)
-        self.label = Label(text="Pontos: 0", font_size='20sp', color=(0, 0, 0, 1))  # Letras pretas
+        self.label = Label(text="Pontos: 0", font_size='20sp', color=(0, 0, 0, 1))
         self.status_bar.add_widget(self.label)
         self.add_widget(self.status_bar)
 
@@ -100,35 +91,44 @@ class GameWidget(Widget):
     def on_key_down(self, window, key, *args):
         if key == 273:  # Seta para cima
             self.abelha_y += self.velocidade
+            self.rotation_angle = 90
         elif key == 274:  # Seta para baixo
             self.abelha_y -= self.velocidade
+            self.rotation_angle = 270
         elif key == 275:  # Seta para a direita
             self.abelha_x += self.velocidade
+            self.rotation_angle = 0
         elif key == 276:  # Seta para a esquerda
             self.abelha_x -= self.velocidade
-        self.abelha.pos = (self.abelha_x, self.abelha_y)
+            self.rotation_angle = 180
+
+        self.update_abelha_position()
+
+    def update_abelha_position(self):
+        self.canvas.remove_group('abelha')
+        with self.canvas:
+            PushMatrix()
+            Translate(self.abelha_x + self.abelha_size / 2, self.abelha_y + self.abelha_size / 2)
+            Rotate(angle=self.rotation_angle, origin=(0, 0))
+            Translate(-(self.abelha_x + self.abelha_size / 2), -(self.abelha_y + self.abelha_size / 2))
+            Rectangle(texture=self.abelha_image, pos=(self.abelha_x, self.abelha_y), size=(self.abelha_size, self.abelha_size), group='abelha')
+            PopMatrix()
 
     def update(self, dt):
-        # Verifica se a abelha tocou alguma flor
         for flower in self.flores:
-            if self.collide_widget(self.abelha, flower):
+            if self.collide_widget(self.abelha_x, self.abelha_y, flower):
                 collected = flower.collect_pollen()
                 self.pontos += collected
 
         if self.pontos >= self.total_pollen:
             self.show_congratulations()
 
-    def rotate_to_target(self):
-        angle = atan2(self.target_y - self.abelha_y, self.target_x - self.abelha_x)
-        self.rotation.angle = degrees(angle) - 90  # Ajustar para que a abelha fique na direção do movimento
-
-    def collide_widget(self, widget1, widget2):
-        widget1_x, widget1_y = widget1.pos
-        widget2_x, widget2_y = widget2.pos
-        return (widget1_x < widget2_x + widget2.size[0] and
-                widget1_x + widget1.size[0] > widget2_x and
-                widget1_y < widget2_y + widget2.size[1] and
-                widget1_y + widget1.size[1] > widget2_y)
+    def collide_widget(self, abelha_x, abelha_y, widget):
+        widget_x, widget_y = widget.pos
+        return (abelha_x < widget_x + widget.size[0] and
+                abelha_x + self.abelha_size > widget_x and
+                abelha_y < widget_y + widget.size[1] and
+                abelha_y + self.abelha_size > widget_y)
 
     def update_pontos(self, instance, value):
         self.label.text = f"Pontos: {value}"
